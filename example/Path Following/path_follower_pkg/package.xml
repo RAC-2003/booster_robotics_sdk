@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>path_follower_pkg</name>
+  <version>0.0.1</version>
+  <description>Pure Pursuit waypoint follower for the K1. Reads /odom, computes v/w per k1_pure_pursuit_full_algorithm.txt, and (once enabled) publishes Move RPC requests on /LocoApiTopicReq - same mechanism as single_step_pkg, since this robot has no /cmd_vel interface.</description>
+  <maintainer email="booster@booster.com">booster</maintainer>
+  <license>Apache-2.0</license>
+  <depend>rclcpp</depend>
+  <depend>nav_msgs</depend>
+  <depend>booster_msgs</depend>
+  <depend>booster_interface</depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
