@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# record_k1_stream_reliable.sh
+# record_data.sh - ROS 2 bag recorder for Booster K1 field data collection.
 #
 # Camera-first ROS 2 recorder for Booster K1.
 # Designed to improve reliability for image/video streaming topics.
@@ -34,6 +34,14 @@
 #   switch, the raw head camera topics recorded zero messages in an
 #   earlier test) - this script does that switch itself, same fix already
 #   applied to record_k1_field_onboard.sh.
+#
+# Recorded topics:
+#   /boostercamera/head/combine/rgb - combined stereo camera frame (left+right lens packed together)
+#   /imu/data                       - orientation, angular velocity, linear acceleration
+#   /odom                           - estimated position/heading and velocity
+#   /joint_states                   - per-joint position, velocity, and effort
+#   /tf                             - live relative positions between robot parts and world
+#   /tf_static                      - fixed (never-moving) relative positions, published once
 
 set -euo pipefail
 
