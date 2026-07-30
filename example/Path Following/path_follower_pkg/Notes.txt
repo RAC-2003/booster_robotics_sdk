@@ -1,0 +1,51 @@
+The problem: under-steering on turns
+The robot didn't turn as much as the recorded path called for. Comparing the run's live log against the CSV:
+
+The recorded path's heading at the sharpest part of the turn (calibrated) was around -75°.
+The robot's actual heading at the corresponding point in the run was only -63° to -68° — roughly 10-12° short of the recorded turn.
+It also stopped 0.19m short of the exact taught endpoint (within the goal tolerance, so it still counted as "arrived," but not exactly on the mark).
+So the robot consistently cuts the corner short on turns rather than fully completing them.
+
+Why this happens
+1. The recorded heading is never used for steering. The CSV's yaw_rad column is only read once, at startup, to compute a one-time calibration rotation (aligning the whole taught path to the robot's 
+   current position/heading). After that, the control loop only ever looks at target positions (x, y) — it has no idea what direction the robot was actually facing at each point when the path was 
+   taught, so nothing corrects it toward matching the original turn.
+2. Pure Pursuit inherently cuts corners. The algorithm steers toward a point a fixed distance ahead along the path (lookahead_m), not along the curve itself. On a turn, the straight line to that 
+   lookahead point sits inside the actual recorded arc — a well-known geometric property of this algorithm, not a bug specific to this implementation. It gets worse the tighter the turn is relative 
+   to the lookahead distance.
+
+Two solutions:
+1. Dynamic (shorter) lookahead on turns — detect when the upcoming path is curving sharply (same kind of turn-detection extract_odometry_map.py already does via its --turn-deg threshold) and 
+   temporarily shrink lookahead_m during that stretch, back to normal on straight sections. A shorter lookahead keeps the aim point closer to the actual curve, so the path hugs the turn more 
+   tightly instead of smoothing over it. Trade-off: too short a lookahead is also what caused the earlier oscillation/bang-bang steering problem, so this needs to stay turn-specific and bounded, 
+   not just globally reduced.
+2. Use the recorded heading as a real steering input, add a second error term to the steering math that compares the robot's current heading not just to "the direction toward the target point" 
+   (what it does now) but also to the recorded heading at that point in the path, blending the two. This directly gives the controller the missing information, that the path also turned by a 
+   certain amount here, not just that there's a point over there. 
+   Trade-off: a real change to the control law rather than a parameter tweak, needs tuning to blend the two terms well, and only works when the CSV has a heading column.
+
+
+
+The problem: robot consistently stops short of the taught endpoint
+The robot doesn't finish at the exact recorded endpoint, it always stops a bit early, by roughly the same margin.
+
+Why this happens
+Primary cause: the stop condition is a tolerance, not an exact match. Rule 4 stops the robot the instant it's within goal_tol (default 0.20m) of the final recorded waypoint, not when it reaches that 
+literal coordinate. By design, that guarantees a shortfall on every run, independent of anything else going on. This alone accounts for the gap already observed.
+
+Plausible, but unconfirmed: the recorded endpoint itself may be inflated by momentum during teaching, not during replay. If the original teach pass captured the "end" position while the demonstrator 
+was still letting go / the robot was still coasting forward a moment, the recorded endpoint sits a little further out than where it was actually meant to stop. The replay controller's own stop, by 
+contrast, is a calculated threshold check, not something momentum can push further, it commands zero velocity the instant the distance check passes. So if the target was inflated at teaching time, a 
+replay that halts precisely at its own trigger point will naturally land short of it. This can't be confirmed without knowing exactly how the teach run was physically ended, it belongs in the report 
+as a hypothesis, not an established cause.
+
+Worth noting for balance: momentum during replay pushes the other way, ruling it out as the cause of the shortfall. The robot kept drifting forward for ~10 more cycles after [AT GOAL] had already 
+fired. If replay-time momentum has any effect at all, it reduces the shortfall rather than causing it. So the momentum explanation, if it holds, has to be about how the teaching run ended, not the 
+replay run.
+
+Solution:
+Treat the goal_tol-driven shortfall as expected, not a bug, if a tighter finish is wanted, reduce --goal-tol. 
+Trade-off: too small a tolerance risks the same kind of stall/deadlock we found earlier, where position noise or a slightly-off path never satisfies the distance check at all.
+
+Confirm or rule out the teaching-momentum hypothesis directly, check how the original teach recordings were actually stopped (operator released a control and the robot coasted, vs. an explicit stop 
+issued exactly at the mark). This is a review step, not a code change, and it's the only way to move the momentum explanation from speculation to confirmed.
